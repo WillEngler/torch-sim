@@ -1,8 +1,0 @@
-# Configuration for the DCO Probot
-# See https://github.com/probot/dco#configuration for more options
-
-# Message to display on a pull request with a failing DCO check
-failureMessage: "All commits in this PR must be signed off."
-
-# Message to display on a pull request with a passing DCO check
-successMessage: "All commits have been signed off. DCO check passed!"
