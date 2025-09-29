@@ -6,8 +6,6 @@ TorchSim welcomes contributions and feedback from the community.
 
 By making a contribution to this project, you certify that you agree to the following:
 
-**Contributor's Certificate of Origin**
-
 (a) The contribution was created in whole or in part by me and I have the right to submit it under the open source license indicated in the file; or
 
 (b) The contribution is based upon previous work that, to the best of my knowledge, is covered under an appropriate open source license and I have the right under that license to submit that work with modifications, whether created in whole or in part by me, under the same open source license (unless I am permitted to submit under a different license), as indicated in the file; or
