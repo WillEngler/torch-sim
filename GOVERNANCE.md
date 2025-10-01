@@ -6,10 +6,10 @@ TorchSim is an open-source project spun out of Radical AI. It is supported by Ra
 
 The project is guided by a **Steering Committee** representing Radical AI, Globus Labs, and the original TorchSim team. It currently consists of:
 
-* Rhys Goodall (Radical AI)  
-* Will Engler (Globus Labs, University of Chicago)  
-* Orion Cohen (TorchSim co-creator)  
-* Abhijeet Gangan (TorchSim co-creator)  
+* Rhys Goodall (Radical AI)
+* Will Engler (Globus Labs, University of Chicago)
+* Orion Cohen (TorchSim co-creator)
+* Abhijeet Gangan (TorchSim co-creator)
 * Janosh Riebesell (TorchSim co-creator)
 
 The Governance Board provides high-level direction, ensures the project stays aligned with its mission, and helps resolve disputes when consensus is difficult.
@@ -20,9 +20,9 @@ In addition to the Board, the project appoints **Maintainers**—trusted contrib
 
 The four roles of the steering committee are:
 
-* **Provide direction**: Establish and communicate a clear roadmap and vision so contributors can align on long-term goals.  
-* **Settle disputes**: Offer a fair resolution mechanism for disagreements among contributors and maintainers.  
-* **Cultivate community**: Clear community guidelines with actual enforcement (if needed) create a safe, collaborative space. It’s the board’s responsibility to establish guidelines and make sure they are followed.  
+* **Provide direction**: Establish and communicate a clear roadmap and vision so contributors can align on long-term goals.
+* **Settle disputes**: Offer a fair resolution mechanism for disagreements among contributors and maintainers.
+* **Cultivate community**: Clear community guidelines with actual enforcement (if needed) create a safe, collaborative space. It’s the board’s responsibility to establish guidelines and make sure they are followed.
 * **Appoint maintainers:** The Steering Committee votes to approve new TorchSim maintainers.
 
 ## **Roadmap**
