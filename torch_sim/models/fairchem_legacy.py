@@ -129,7 +129,7 @@ class FairChemV1Model(ModelInterface):
         seed: int | None = None,
         dtype: torch.dtype | None = None,
         compute_stress: bool = False,
-        pbc: bool = True,
+        pbc: torch.Tensor | bool = True,
         disable_amp: bool = True,
     ) -> None:
         """Initialize the FairChemV1Model with specified configuration.
@@ -150,7 +150,7 @@ class FairChemV1Model(ModelInterface):
             seed (int | None): Random seed for reproducibility
             dtype (torch.dtype | None): Data type to use for computation
             compute_stress (bool): Whether to compute stress tensor
-            pbc (bool): Whether to use periodic boundary conditions
+            pbc (torch.Tensor | bool): Whether to use periodic boundary conditions
             disable_amp (bool): Whether to disable AMP
         Raises:
             RuntimeError: If both model_name and model are specified
@@ -170,6 +170,8 @@ class FairChemV1Model(ModelInterface):
         self._compute_stress = compute_stress
         self._compute_forces = True
         self._memory_scales_with = "n_atoms"
+        if isinstance(pbc, bool):
+            pbc = torch.tensor([pbc] * 3, dtype=torch.bool)
         self.pbc = pbc
 
         if model_name is not None:
@@ -364,7 +366,12 @@ class FairChemV1Model(ModelInterface):
         if state.system_idx is None:
             state.system_idx = torch.zeros(state.positions.shape[0], dtype=torch.int)
 
-        if self.pbc != state.pbc:
+        if isinstance(self.pbc, torch.Tensor) and isinstance(state.pbc, torch.Tensor):
+            pbc_match = torch.equal(self.pbc, state.pbc)
+        else:
+            pbc_match = bool(torch.all(self.pbc == state.pbc))
+
+        if not pbc_match:
             raise ValueError(
                 "PBC mismatch between model and state. "
                 "For FairChemV1Model PBC needs to be defined in the model class."
@@ -383,7 +390,7 @@ class FairChemV1Model(ModelInterface):
                     atomic_numbers=state.atomic_numbers[c - n : c].clone(),
                     fixed=fixed[c - n : c].clone(),
                     natoms=n,
-                    pbc=torch.tensor([state.pbc, state.pbc, state.pbc], dtype=torch.bool),
+                    pbc=state.pbc if state.pbc.shape == (3,) else state.pbc.repeat(3),
                 )
             )
         self.data_object = Batch.from_data_list(data_list)
