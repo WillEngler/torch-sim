@@ -385,6 +385,22 @@ class FairChemV1Model(ModelInterface):
         natoms = torch.bincount(state.system_idx)
         fixed = torch.zeros((state.system_idx.size(0), natoms.sum()), dtype=torch.int)
         data_list = []
+        
+        # Extract scalar boolean from pbc tensor BEFORE the loop (only need to do this once)
+        # Fairchem-legacy doesn't support mixed PBC, so verify all directions match
+        if isinstance(state.pbc, torch.Tensor):
+            if not torch.all(state.pbc == state.pbc[0]):
+                raise ValueError(
+                    "FairChemV1Model does not support mixed PBC "
+                    f"(got pbc={state.pbc.tolist()})"
+                )
+            pbc_value = bool(state.pbc[0].item())
+        else:
+            pbc_value = bool(state.pbc)
+
+        # Create the pbc tensor once
+        pbc_tensor = torch.tensor([pbc_value, pbc_value, pbc_value], dtype=torch.bool)
+
         for i, (n, c) in enumerate(
             zip(natoms, torch.cumsum(natoms, dim=0), strict=False)
         ):
@@ -395,7 +411,7 @@ class FairChemV1Model(ModelInterface):
                     atomic_numbers=state.atomic_numbers[c - n : c].clone(),
                     fixed=fixed[c - n : c].clone(),
                     natoms=n,
-                    pbc=state.pbc if state.pbc.shape == (3,) else state.pbc.repeat(3),
+                    pbc=pbc_tensor
                 )
             )
         self.data_object = Batch.from_data_list(data_list)
