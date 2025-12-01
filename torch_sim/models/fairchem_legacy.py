@@ -172,13 +172,11 @@ class FairChemV1Model(ModelInterface):
         self._memory_scales_with = "n_atoms"
         if isinstance(pbc, bool):
             pbc = torch.tensor([pbc] * 3, dtype=torch.bool)
-        elif isinstance(pbc, torch.Tensor):
-            # Validate that all PBC directions are the same
-            if not torch.all(pbc == pbc[0]):
-                raise ValueError(
-                    "FairChemV1Model does not support mixed PBC "
-                    f"(got pbc={pbc.tolist()})"
-                )
+        # Validate that all PBC directions are the same
+        elif not torch.all(pbc == pbc[0]):
+            raise ValueError(
+                f"FairChemV1Model does not support mixed PBC (got pbc={pbc.tolist()})"
+            )
         self.pbc = pbc
 
         if model_name is not None:
