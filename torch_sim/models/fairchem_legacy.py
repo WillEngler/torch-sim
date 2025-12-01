@@ -239,7 +239,10 @@ class FairChemV1Model(ModelInterface):
             )
 
         if "backbone" in config["model"]:
-            config["model"]["backbone"]["use_pbc"] = pbc
+            pbc_bool = (
+                bool(torch.all(self.pbc)) if isinstance(self.pbc, torch.Tensor) else pbc
+            )
+            config["model"]["backbone"]["use_pbc"] = pbc_bool
             config["model"]["backbone"]["use_pbc_single"] = False
             if dtype is not None:
                 try:
@@ -335,7 +338,9 @@ class FairChemV1Model(ModelInterface):
         except NotImplementedError:
             print("Unable to load checkpoint!")
 
-    def forward(self, state: ts.SimState | StateDict) -> dict:
+    def forward(  # noqa: C901
+        self, state: ts.SimState | StateDict
+    ) -> dict:
         """Perform forward pass to compute energies, forces, and other properties.
 
         Takes a simulation state and computes the properties implemented by the model,
