@@ -84,7 +84,7 @@ jobs:
           fi
 
       - name: Run ${{ matrix.model.test_path }} tests
-        if: ${{ !contains(matrix.model.name, 'fairchem') || github.event.pull_request.head.repo.fork == false }}
+        if: ${{ !contains(matrix.model.name, 'fairchem') }}
         env:
           HF_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
         run: |
