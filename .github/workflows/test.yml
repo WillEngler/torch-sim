@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos]
         version:
           - { python: '3.12', resolution: highest }
           - { python: '3.12', resolution: lowest-direct }
