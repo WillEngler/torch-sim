@@ -172,6 +172,13 @@ class FairChemV1Model(ModelInterface):
         self._memory_scales_with = "n_atoms"
         if isinstance(pbc, bool):
             pbc = torch.tensor([pbc] * 3, dtype=torch.bool)
+        elif isinstance(pbc, torch.Tensor):
+            # Validate that all PBC directions are the same
+            if not torch.all(pbc == pbc[0]):
+                raise ValueError(
+                    "FairChemV1Model does not support mixed PBC "
+                    f"(got pbc={pbc.tolist()})"
+                )
         self.pbc = pbc
 
         if model_name is not None:
@@ -238,10 +245,9 @@ class FairChemV1Model(ModelInterface):
                 "Custom neighbor list is not supported for FairChemV1Model."
             )
 
+        pbc_bool = bool(self.pbc[0].item())
+
         if "backbone" in config["model"]:
-            pbc_bool = (
-                bool(torch.all(self.pbc)) if isinstance(self.pbc, torch.Tensor) else pbc
-            )
             config["model"]["backbone"]["use_pbc"] = pbc_bool
             config["model"]["backbone"]["use_pbc_single"] = False
             if dtype is not None:
@@ -256,7 +262,7 @@ class FairChemV1Model(ModelInterface):
                         "WARNING: dtype not found in backbone, using default model dtype"
                     )
         else:
-            config["model"]["use_pbc"] = pbc
+            config["model"]["use_pbc"] = pbc_bool
             config["model"]["use_pbc_single"] = False
             if dtype is not None:
                 try:
@@ -371,36 +377,29 @@ class FairChemV1Model(ModelInterface):
         if state.system_idx is None:
             state.system_idx = torch.zeros(state.positions.shape[0], dtype=torch.int)
 
-        if isinstance(self.pbc, torch.Tensor) and isinstance(state.pbc, torch.Tensor):
-            pbc_match = torch.equal(self.pbc, state.pbc)
-        else:
-            pbc_match = bool(torch.all(self.pbc == state.pbc))
-
-        if not pbc_match:
-            raise ValueError(
-                "PBC mismatch between model and state. "
-                "For FairChemV1Model PBC needs to be defined in the model class."
-            )
-
-        natoms = torch.bincount(state.system_idx)
-        fixed = torch.zeros((state.system_idx.size(0), natoms.sum()), dtype=torch.int)
-        data_list = []
-        
-        # Extract scalar boolean from pbc tensor BEFORE the loop (only need to do this once)
-        # Fairchem-legacy doesn't support mixed PBC, so verify all directions match
+        # Extract uniform PBC value from state (validate it's uniform)
         if isinstance(state.pbc, torch.Tensor):
             if not torch.all(state.pbc == state.pbc[0]):
                 raise ValueError(
                     "FairChemV1Model does not support mixed PBC "
                     f"(got pbc={state.pbc.tolist()})"
                 )
-            pbc_value = bool(state.pbc[0].item())
+            state_pbc_bool = bool(state.pbc[0].item())
         else:
-            pbc_value = bool(state.pbc)
+            state_pbc_bool = bool(state.pbc)
 
-        # Create the pbc tensor once
-        pbc_tensor = torch.tensor([pbc_value, pbc_value, pbc_value], dtype=torch.bool)
+        model_pbc_bool = bool(self.pbc[0].item())
 
+        if model_pbc_bool != state_pbc_bool:
+            raise ValueError(
+                f"PBC mismatch: model has pbc={model_pbc_bool}, "
+                f"but state has pbc={state_pbc_bool}. "
+                "FairChemV1Model requires model and state PBC to match."
+            )
+
+        natoms = torch.bincount(state.system_idx)
+        fixed = torch.zeros((state.system_idx.size(0), natoms.sum()), dtype=torch.int)
+        data_list = []
         for i, (n, c) in enumerate(
             zip(natoms, torch.cumsum(natoms, dim=0), strict=False)
         ):
@@ -411,7 +410,7 @@ class FairChemV1Model(ModelInterface):
                     atomic_numbers=state.atomic_numbers[c - n : c].clone(),
                     fixed=fixed[c - n : c].clone(),
                     natoms=n,
-                    pbc=pbc_tensor
+                    pbc=state.pbc,
                 )
             )
         self.data_object = Batch.from_data_list(data_list)
