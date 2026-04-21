@@ -1,0 +1,107 @@
+name: GPU Smoke Tests (HF Jobs)
+
+# Runs the full `pytest tests/` suite on an HF Jobs GPU runner, to catch
+# device-plumbing regressions that CPU CI can't see. Manual dispatch only;
+# maintainers can decide later whether to wire this to PRs, schedules, or
+# labels.
+#
+# Requires repository secret HF_JOB_RUNNER_TOKEN: a Hugging Face user token
+# with Jobs write access in the namespace that holds the pre-paid credits.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to test (default = branch the workflow was dispatched on)
+        required: false
+        type: string
+      flavor:
+        description: HF Jobs hardware flavor
+        required: false
+        default: a10g-small
+        type: choice
+        options:
+          - t4-small
+          - t4-medium
+          - l4x1
+          - a10g-small
+          - a10g-large
+          - a100-large
+      timeout:
+        description: HF Jobs timeout (e.g. 30m, 1h)
+        required: false
+        default: 30m
+        type: string
+
+concurrency:
+  group: gpu-smoke-${{ github.event.inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Resolve commit SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install hf CLI
+        run: pip install --upgrade "huggingface_hub>=1.0.0"
+
+      - name: Run TorchSim tests on HF Jobs
+        env:
+          HF_TOKEN: ${{ secrets.HF_JOB_RUNNER_TOKEN }}
+          TORCHSIM_SHA: ${{ steps.sha.outputs.sha }}
+          TORCHSIM_REPO: https://github.com/${{ github.repository }}.git
+          PYTEST_ARGS: ""
+        # `hf jobs uv run` (streaming) returns 0 even when the HF Job fails,
+        # so we submit in detach mode, extract JOB_ID from the CLI's
+        # "Job started with ID: <id>\nView at: <url>" banner, stream logs
+        # for the GH Actions log, then inspect the final stage to decide
+        # exit status.
+        run: |
+          set -euo pipefail
+          submit_output=$(hf jobs uv run -d \
+            --flavor "${{ inputs.flavor }}" \
+            --timeout "${{ inputs.timeout }}" \
+            --secrets HF_TOKEN \
+            -e "TORCHSIM_SHA=$TORCHSIM_SHA" \
+            -e "TORCHSIM_REPO=$TORCHSIM_REPO" \
+            -e "PYTEST_ARGS=$PYTEST_ARGS" \
+            -l workflow=gpu-smoke \
+            -l sha=${{ steps.sha.outputs.sha }} \
+            .github/hf-jobs/run_tests.py)
+          printf '%s\n' "$submit_output"
+          JOB_ID=$(printf '%s\n' "$submit_output" | awk '/^Job started with ID:/ {print $NF; exit}')
+          if [[ -z "$JOB_ID" ]]; then
+            echo "::error::Could not parse JOB_ID from hf jobs output"
+            exit 1
+          fi
+          echo "HF Job ID: $JOB_ID"
+          echo "**HF Job:** \`$JOB_ID\`" >> "$GITHUB_STEP_SUMMARY"
+          hf jobs logs -f "$JOB_ID" || true
+          # `hf jobs logs -f` can exit a few seconds before HF flips the job
+          # stage to a terminal value, so poll until we see a terminal state.
+          for _ in $(seq 1 40); do
+            stage=$(hf jobs inspect "$JOB_ID" | python -c \
+              'import json,sys; print(json.load(sys.stdin)[0]["status"]["stage"])')
+            case "$stage" in
+              COMPLETED|ERROR|CANCELED|TIMEOUT|DELETED) break ;;
+            esac
+            sleep 5
+          done
+          echo "HF Job final stage: $stage"
+          if [[ "$stage" != "COMPLETED" ]]; then
+            echo "::error::HF Job $JOB_ID did not complete cleanly (stage=$stage)"
+            exit 1
+          fi
